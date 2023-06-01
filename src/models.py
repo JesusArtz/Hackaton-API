@@ -18,7 +18,7 @@ def compute_control_digit(clabe: Union[str, List[int]]) -> str:
     clabe = [int(i) for i in clabe]
     weighted = [
         c * w % 10 for c, w in zip(clabe[: CLABE_LENGTH - 1], CLABE_WEIGHTS)
-    ]
+    ] 
     summed = sum(weighted) % 10
     control_digit = (10 - summed) % 10
     return str(control_digit)
@@ -125,7 +125,14 @@ class User:
         account = self.db.query('SELECT * FROM cuenta WHERE userid = %s', result[0]['curp'])
         if not result:
             return {'error': 'User not found'}
-        print(result)
+        print({
+            'name': result[0]['name'],
+            'lastName': result[0]['lastName'],
+            'email': result[0]['email'],
+            'curp': result[0]['curp'],
+            'account': account[0]['accountNumber'],
+            'balance': account[0]['balance']
+        })
         return {
             'name': result[0]['name'],
             'lastName': result[0]['lastName'],
@@ -210,5 +217,18 @@ class Operations:
         self.db.execute('INSERT INTO transactions (transactionId, type, amount, accountNumber) VALUES (%s, %s, %s, %s)', (self.transaction_id, 'transfer received', self.data['amount'], self.data['accountTo']))
         return {'message': 'Transfer successful'}
     
+    def save_transactions(self):
+        if not all(key in self.data for key in ['token', 'amount', 'type', 'date']):
+            return {'error': 'Invalid data'}
     
+        email = decode(self.data['token'], APP.config['SECRET_KEY'], algorithms=["HS256"])
+        result = self.db.query('SELECT * FROM users WHERE email = %s', email['email'])
+        account = self.db.query('SELECT * FROM cuenta WHERE userid = %s', result[0]['curp'])
+
+        if not result:
+            return {'error': 'User not found'}
+        
+        self.db.execute('UPDATE cuenta SET balance = %s WHERE accountNumber = %s', (str(int(account[0]['balance']) + self.data['amount']), account[0]['accountNumber']))
+        self.db.execute('INSERT INTO transactions (transactionId, type, amount, account) VALUES (%s, %s, %s, %s)', (self.transaction_id, self.data['type'], self.data['amount'], account[0]['accountNumber']))
+        return {'message': 'Transaction saved'}
 
